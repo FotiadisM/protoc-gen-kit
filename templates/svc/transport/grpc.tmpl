@@ -1,0 +1,88 @@
+package transport
+
+// This file provides server-side bindings for the gRPC transport.
+// It utilizes the transport/grpc.Server.
+
+import (
+	"context"
+	"net/http"
+
+	grpctransport "github.com/go-kit/kit/transport/grpc"
+	"google.golang.org/grpc/metadata"
+
+	"{{.ImportPath}}/pkg/{{.Package}}"
+	"{{.ImportPath}}/pkg/svc"
+)
+
+{{- $sname := .ServiceName}}{{$spkg := .Package}}
+
+// CtxKey type definision for passing context values
+type CtxKey string
+
+// grpcServer implements the {{.ServiceNameLoweCase}}.{{.ServiceName}}Server interface
+type grpcServer struct { {{- range .Methods}}
+	{{.NameLowerCase}}     grpctransport.Handler{{end}}
+	{{.Package}}.Unimplemented{{.ServiceName}}Server
+}
+
+{{- range .Methods}}
+
+func (s *grpcServer) {{.Name}}(ctx context.Context, req *{{$spkg}}.{{.Request}}) (*{{$spkg}}.{{.Response}}, error) {
+	_, rep, err := s.{{$spkg}}.ServeGRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return rep.(*{{$spkg}}.{{.Response}}), nil
+}{{end}}
+
+// MakeGRPCServer makes a set of endpoints available as a gRPC {{.ServiceName}}Server.
+func MakeGRPCServer(endpoints svc.Endpoints, options ...grpctransport.ServerOption) {{.Package}}.{{.ServiceName}}Server {
+	serverOptions := []grpctransport.ServerOption{
+		grpctransport.ServerBefore(metadataToContext),
+	}
+
+	serverOptions = append(serverOptions, options...)
+
+	return &grpcServer{ {{- range .Methods}}
+		{{.NameLowerCase}}: grpctransport.NewServer(
+			endpoints.{{.Name}}Endpoint,
+			DecodeGRPC{{.Name}}Request,
+			EncodeGRPC{{.Name}}Response,
+			serverOptions...,
+		),{{end}}
+	}
+}
+
+// Decode Request
+{{range .Methods}}
+// DecodeGRPC{{.Name}}Request is a transport/grpc.DecodeRequestFunc that converts a
+// gRPC {{.Name}} request to a user-domain {{.Name}} request.
+func DecodeGRPC{{.Name}}Request(_ context.Context, grpcReq interface{}) (interface{}, error) {
+	req := grpcReq.(*{{$spkg}}.{{.Request}})
+	return req, nil
+}
+{{end}}
+
+// Encode Response
+{{range .Methods}}
+// EncodeGRPC{{.Name}}Response is a transport/grpc.EncodeResponseFunc that converts a
+// user-domain {{.Name}} response to a gRPC {{.Name}} reply.
+func EncodeGRPC{{.Name}}Response(_ context.Context, response interface{}) (interface{}, error) {
+	resp := response.(*{{$spkg}}.{{.Response}})
+	return resp, nil
+}
+{{end}}
+
+// Helpers
+
+func metadataToContext(ctx context.Context, md metadata.MD) context.Context {
+	ctx = context.WithValue(ctx, CtxKey("Transport"), "gRPC")
+	for k, v := range md {
+		if v != nil {
+			ctx = context.WithValue(ctx, CtxKey(http.CanonicalHeaderKey(k)), v[0])
+		}
+	}
+
+	return ctx
+}

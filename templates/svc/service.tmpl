@@ -1,0 +1,29 @@
+package svc
+
+import (
+	"context"
+
+	"{{.ImportPath}}/pkg/{{.Package}}"
+)
+
+{{- $sname := .ServiceNameLoweCase}}{{$spkg := .Package}}
+
+// {{.ServiceNameLoweCase}}Service contains the business logic
+type {{.ServiceNameLoweCase}}Service struct {
+	{{.Package}}.Unimplemented{{.ServiceName}}Server
+}
+
+// NewService returns an implementation of {.ServiceName}Server.
+func NewService() {{.Package}}.{{.ServiceName}}Server {
+	return &{{.ServiceNameLoweCase}}Service{}
+}
+
+{{- range .Methods}}
+
+func (s *{{$sname}}Service) {{.Name}}(ctx context.Context, req *{{$spkg}}.{{.Request}}) (res *{{$spkg}}.{{.Response}}, err error) {
+	res = &{{$spkg}}.{{.Response}}{}
+
+	// TODO put your business logic here
+
+	return
+}{{end}}

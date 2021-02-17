@@ -1,0 +1,87 @@
+package svc
+
+// This file contains methods to make individual endpoints from services,
+// request and response types to serve those endpoints
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/go-kit/kit/endpoint"
+
+	"{{.ImportPath}}/pkg/{{.Package}}"
+)
+{{$sname := .ServiceName}}{{$spkg := .Package}}
+// Endpoints collects all of the endpoints that compose the service. It's
+// meant to be used as a helper struct, to collect all of the endpoints into
+// a single parameter.
+type Endpoints struct { {{- range .Methods}}
+	{{.Name}}Endpoint endpoint.Endpoint{{end}}
+}
+
+// Make Endpoints
+{{range .Methods}}
+// Make{{.Name}}Endpoint creates a go-kit/kit/endpoint.Endpoint to be con
+func Make{{.Name}}Endpoint(s {{$spkg}}.{{$sname}}Server) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (response interface{}, err error) {
+		req := request.(*{{$spkg}}.{{.Request}})
+
+		v, err := s.{{.Name}}(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+
+		return v, nil
+	}
+}
+{{end}}
+// WrapAllExcept wraps each Endpoint field of struct Endpoints with a
+// go-kit/kit/endpoint.Middleware.
+// Use this for applying a set of middlewares to every endpoint in the service.
+// Optionally, endpoints can be passed in by name to be excluded from being wrapped.
+// WrapAllExcept(middleware, "Status", "Ping")
+func (e *Endpoints) WrapAllExcept(middleware endpoint.Middleware, excluded ...string) {
+	included := map[string]struct{}{ {{- range .Methods}}
+		"{{.Name}}":	{},{{end}}
+	}
+
+	for _, ex := range excluded {
+		if _, ok := included[ex]; !ok {
+			panic(fmt.Sprintf("Excluded endpoint '%s' does not exist", ex))
+		}
+		delete(included, ex)
+	}
+
+	for inc := range included { {{- range .Methods}}
+		if inc == "{{.Name}}" {
+			e.{{.Name}}Endpoint = middleware(e.{{.Name}}Endpoint)
+		} {{- end}}
+	}
+}
+
+// LabeledMiddleware will get passed the endpoint name when passed to
+// WrapAllLabeledExcept, this can be used to write a generic metrics
+// middleware which can send the endpoint name to the metrics collector.
+type LabeledMiddleware func(name string, in endpoint.Endpoint) endpoint.Endpoint
+
+// WrapAllLabeledExcept wraps each Endpoint field of struct Endpoints with a
+// LabeledMiddleware, which will receive the name of the endpoint. See
+// LabeldMiddleware.
+func (e *Endpoints) WrapAllLabeledExcept(middleware LabeledMiddleware, excluded ...string) {
+	included := map[string]struct{}{ {{- range .Methods}}
+		"{{.Name}}":	{},{{end}}
+	}
+
+	for _, ex := range excluded {
+		if _, ok := included[ex]; !ok {
+			panic(fmt.Sprintf("Excluded endpoint '%s' does not exist", ex))
+		}
+		delete(included, ex)
+	}
+
+	for inc := range included { {{- range .Methods}}
+		if inc == "{{.Name}}" {
+			e.{{.Name}}Endpoint = middleware("{{.Name}}", e.{{.Name}}Endpoint)
+		} {{- end}}
+	}
+}

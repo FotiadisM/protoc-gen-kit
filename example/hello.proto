@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package hello;
+
+import "google/api/annotations.proto";
+
+option go_package = "github.com/FotiadisM/protoc-gen-kit/example/hello";
+
+service Hello {
+  rpc Hello (HelloRequest) returns (HelloResponse) {
+    option (google.api.http) = {
+      get: "/hello"
+    };
+  }
+
+  rpc HelloWith (HelloWithRequest) returns (HelloResponse) {
+    option (google.api.http) = {
+      get: "/hello/{name}"
+    };
+  }
+}
+
+message HelloRequest {}
+
+message HelloWithRequest {
+  string name = 1;
+}
+
+message HelloResponse {
+  string Out = 1;
+}

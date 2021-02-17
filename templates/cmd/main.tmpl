@@ -1,0 +1,35 @@
+package main
+
+import (
+	"flag"
+	"fmt"
+	"os"
+
+	"{{.ImportPath}}/pkg/server"
+)
+
+func main() {
+	config := server.Config{}
+
+	flag.StringVar(&config.HTTPAddr, "http_addr", ":5050", "HTTP listen address")
+	flag.StringVar(&config.GRPCAddr, "grpc_addr", ":5040", "gRPC listen address")
+	flag.StringVar(&config.DebugAddr, "debug_addr", ":5060", "Debug and metrics listen address")
+
+	// Flags have priority over environment variables
+	if port := os.Getenv("PORT"); port != "" {
+		config.HTTPAddr = fmt.Sprintf(":%s", port)
+	}
+	if addr := os.Getenv("HTTP_ADDR"); addr != "" {
+		config.HTTPAddr = addr
+	}
+	if addr := os.Getenv("GRPC_ADDR"); addr != "" {
+		config.GRPCAddr = addr
+	}
+	if addr := os.Getenv("DEBUG_ADDR"); addr != "" {
+		config.DebugAddr = addr
+	}
+
+	flag.Parse()
+
+	server.Run(config)
+}
