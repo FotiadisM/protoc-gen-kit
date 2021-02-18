@@ -26,7 +26,6 @@ const contentType = "application/json; charset=utf-8"
 // on predefined paths.
 func MakeHTTPHandler(endpoints svc.Endpoints, options ...httptransport.ServerOption) http.Handler {
 	serverOptions := []httptransport.ServerOption{
-		httptransport.ServerBefore(httptransport.PopulateRequestContext),
 		httptransport.ServerBefore(headersToContext),
 		httptransport.ServerErrorEncoder(errorEncoder),
 		httptransport.ServerAfter(httptransport.SetContentType(contentType)),
