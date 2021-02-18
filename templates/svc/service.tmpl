@@ -3,25 +3,25 @@ package svc
 import (
 	"context"
 
-	"{{.ImportPath}}/pkg/{{.Package}}"
+	pb "{{.ImportPath}}/pkg/pb"
 )
 
-{{- $sname := .ServiceNameLoweCase}}{{$spkg := .Package}}
+{{- $sname := .ServiceNameLoweCase}}
 
 // {{.ServiceNameLoweCase}}Service contains the business logic
 type {{.ServiceNameLoweCase}}Service struct {
-	{{.Package}}.Unimplemented{{.ServiceName}}Server
+	pb.Unimplemented{{.ServiceName}}Server
 }
 
 // NewService returns an implementation of {.ServiceName}Server.
-func NewService() {{.Package}}.{{.ServiceName}}Server {
+func NewService() pb.{{.ServiceName}}Server {
 	return &{{.ServiceNameLoweCase}}Service{}
 }
 
 {{- range .Methods}}
 
-func (s *{{$sname}}Service) {{.Name}}(ctx context.Context, req *{{$spkg}}.{{.Request}}) (res *{{$spkg}}.{{.Response}}, err error) {
-	res = &{{$spkg}}.{{.Response}}{}
+func (s *{{$sname}}Service) {{.Name}}(ctx context.Context, req *pb.{{.Request}}) (res *pb.{{.Response}}, err error) {
+	res = &pb.{{.Response}}{}
 
 	// TODO put your business logic here
 

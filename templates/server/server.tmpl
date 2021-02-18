@@ -13,7 +13,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	"{{.ImportPath}}/pkg/{{.Package}}"
+	pb "{{.ImportPath}}/pkg/pb"
 	"{{.ImportPath}}/pkg/middleware"
 	"{{.ImportPath}}/pkg/svc"
 	"{{.ImportPath}}/pkg/svc/transport"
@@ -29,7 +29,7 @@ type Config struct {
 // wrapEndpoints takes a service containing the buisness logic,
 // creates all the endpoints, and wraps them with middleware
 // using the middleware.WrapService() and middleware.WrapEndpoints()
-func wrapEndpoints(service {{.Package}}.{{.ServiceName}}Server) svc.Endpoints {
+func wrapEndpoints(service pb.{{.ServiceName}}Server) svc.Endpoints {
 	// Business domain.
 
 	// Wrap Service with middlewares. See handlers/middlewares.go
@@ -94,7 +94,7 @@ func Run(cfg Config) {
 		}
 
 		srv := transport.MakeGRPCServer(endpoints)
-		{{.Package}}.Register{{.ServiceName}}Server(grpcServer, srv)
+		pb.Register{{.ServiceName}}Server(grpcServer, srv)
 
 		errc <- grpcServer.Serve(ln)
 	}()

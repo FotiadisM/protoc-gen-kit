@@ -9,9 +9,9 @@ import (
 
 	"github.com/go-kit/kit/endpoint"
 
-	"{{.ImportPath}}/pkg/{{.Package}}"
+	pb "{{.ImportPath}}/pkg/pb"
 )
-{{$sname := .ServiceName}}{{$spkg := .Package}}
+{{$sname := .ServiceName}}
 // Endpoints collects all of the endpoints that compose the service. It's
 // meant to be used as a helper struct, to collect all of the endpoints into
 // a single parameter.
@@ -22,9 +22,9 @@ type Endpoints struct { {{- range .Methods}}
 // Make Endpoints
 {{range .Methods}}
 // Make{{.Name}}Endpoint creates a go-kit/kit/endpoint.Endpoint to be con
-func Make{{.Name}}Endpoint(s {{$spkg}}.{{$sname}}Server) endpoint.Endpoint {
+func Make{{.Name}}Endpoint(s pb.{{$sname}}Server) endpoint.Endpoint {
 	return func(ctx context.Context, request interface{}) (response interface{}, err error) {
-		req := request.(*{{$spkg}}.{{.Request}})
+		req := request.(*pb.{{.Request}})
 
 		v, err := s.{{.Name}}(ctx, req)
 		if err != nil {

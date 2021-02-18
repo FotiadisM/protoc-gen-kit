@@ -41,12 +41,12 @@ type serivce struct {
 	Methods             []method
 }
 
-// files containes all the files that are going to be created
+// generatedFiles containes all the files that are going to be created
 // The Key containes the path to the file to be created while
 // the Value contains the path to the template to be used
 // The template must be contained inside the templateDir folder
 // {svc} will be replaced by the service name
-var files = map[string]string{
+var generatedFiles = map[string]string{
 	"./cmd/{svc}/main.go":            "templates/cmd/main.tmpl",
 	"./pkg/middleware/middleware.go": "templates/middleware/middleware.tmpl",
 	"./pkg/middleware/wrap.go":       "templates/middleware/wrap.tmpl",
@@ -63,10 +63,15 @@ func main() {
 		panic(fmt.Errorf("Failed to parse proto file %w", err))
 	}
 
-	for f, t := range files {
+	for f, t := range generatedFiles {
 		if err := createFileFromTemplate(svc, f, t); err != nil {
 			panic(fmt.Errorf("Failed to create file %v: %w", f, err))
 		}
+	}
+
+	// create the folder for go_out and grpc_out
+	if err := os.Mkdir("./pkg/pb", 0775); !errors.Is(err, os.ErrExist) {
+		panic(err)
 	}
 }
 

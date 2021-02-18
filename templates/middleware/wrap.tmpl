@@ -5,7 +5,7 @@ import (
 
 	"github.com/go-kit/kit/log"
 
-	"{{.ImportPath}}/pkg/{{.Package}}"
+	pb "{{.ImportPath}}/pkg/pb"
 	"{{.ImportPath}}/pkg/svc"
 )
 
@@ -38,7 +38,7 @@ func WrapEndpoints(in svc.Endpoints) (out svc.Endpoints) {
 }
 
 // WrapService wraps the service with middleware
-func WrapService(in {{.Package}}.{{.ServiceName}}Server) (out {{.Package}}.{{.ServiceName}}Server) {
+func WrapService(in pb.{{.ServiceName}}Server) (out pb.{{.ServiceName}}Server) {
 
 	return in
 }
