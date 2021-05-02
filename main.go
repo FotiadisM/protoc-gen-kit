@@ -23,22 +23,28 @@ import (
 //go:embed templates
 var templateDir embed.FS
 
+type http struct {
+	Method        string
+	URI           string
+	Vars          []string
+	VarsLowerCase []string
+}
+
 type method struct {
 	Name          string
 	NameLowerCase string
 	Request       string
 	Response      string
-	HTTPMethod    string
-	HTTPurl       string
+	HTTP          *http
 }
 
 // service contains all the necessary information to generate the files
 type serivce struct {
-	ImportPath          string
-	Package             string
-	ServiceName         string
-	ServiceNameLoweCase string
-	Methods             []method
+	ImportPath           string
+	Package              string
+	ServiceName          string
+	ServiceNameLowerCase string
+	Methods              []method
 }
 
 // generatedFiles containes all the files that are going to be created
@@ -60,25 +66,27 @@ var generatedFiles = map[string]string{
 func main() {
 	svc, err := parseProto()
 	if err != nil {
-		panic(fmt.Errorf("Failed to parse proto file %w", err))
+		panic(fmt.Errorf("failed to parse proto file %w", err))
 	}
 
 	for f, t := range generatedFiles {
 		if err := createFileFromTemplate(svc, f, t); err != nil {
-			panic(fmt.Errorf("Failed to create file %v: %w", f, err))
+			panic(fmt.Errorf("failed to create file %v: %w", f, err))
 		}
 	}
 
 	// create the folder for go_out and grpc_out
-	if err := os.Mkdir("./pkg/pb", 0775); !errors.Is(err, os.ErrExist) {
-		panic(err)
+	if err := os.Mkdir("./pkg/pb", 0775); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			panic(err)
+		}
 	}
 }
 
 func parseProto() (svc serivce, err error) {
 	input, err := io.ReadAll(os.Stdin)
 	if err != nil {
-		return svc, fmt.Errorf("ioutil.ReadAll(): %w", err)
+		return svc, fmt.Errorf("io.ReadAll(): %w", err)
 	}
 
 	req := pluginpb.CodeGeneratorRequest{}
@@ -99,41 +107,14 @@ func parseProto() (svc serivce, err error) {
 	svc.Package = string(f.GoPackageName)
 	svc.ImportPath = filepath.Dir(string(f.GoImportPath))
 	svc.ServiceName = strings.Title(f.Services[0].GoName)
-	svc.ServiceNameLoweCase = firstLetterToLowerCase(svc.ServiceName)
+	svc.ServiceNameLowerCase = firstLetterToLowerCase(svc.ServiceName)
 
 	for _, m := range f.Services[0].Methods {
-		svcMethod := method{}
+		var svcMethod method
 
-		svcMethod.Name = strings.Title(m.GoName)
-		svcMethod.NameLowerCase = firstLetterToLowerCase(svcMethod.Name)
-		svcMethod.Request = m.Input.GoIdent.GoName
-		svcMethod.Response = m.Output.GoIdent.GoName
-
-		options, ok := m.Desc.Options().(*descriptorpb.MethodOptions)
-		if !ok {
-			return svc, fmt.Errorf("MethodDescriptor.Options() are not of type google.protobuf.descriptor")
-		}
-
-		httpRule, ok := proto.GetExtension(options, annotations.E_Http).(*annotations.HttpRule)
-		if !ok {
-			return svc, fmt.Errorf("proto.GetExtension(): method options are not of type google.api.httpRule")
-		}
-
-		switch httpRule.Pattern.(type) {
-		case *annotations.HttpRule_Get:
-			svcMethod.HTTPMethod = "GET"
-			svcMethod.HTTPurl = httpRule.GetGet()
-		case *annotations.HttpRule_Post:
-			svcMethod.HTTPMethod = "POST"
-			svcMethod.HTTPurl = httpRule.GetPost()
-		case *annotations.HttpRule_Put:
-			svcMethod.HTTPMethod = "PUT"
-			svcMethod.HTTPurl = httpRule.GetPut()
-		case *annotations.HttpRule_Patch:
-			svcMethod.HTTPMethod = "PATCH"
-			svcMethod.HTTPurl = httpRule.GetPatch()
-		default:
-			return svc, errors.New("HTTP method must be of type GET | POST | PUT | PATCH")
+		svcMethod, err = parseMethod(m)
+		if err != nil {
+			return
 		}
 
 		svc.Methods = append(svc.Methods, svcMethod)
@@ -142,12 +123,83 @@ func parseProto() (svc serivce, err error) {
 	return
 }
 
-func createFileFromTemplate(svc serivce, filePath, templatePath string) (err error) {
-	filePath = strings.Replace(filePath, "{svc}", svc.ServiceNameLoweCase, -1)
+func parseMethod(m *protogen.Method) (svcMethod method, err error) {
 
-	if _, err = os.Stat(filePath); os.IsExist(err) {
-		// TODO promt user that file already exist and it will be truncated
+	svcMethod.Name = strings.Title(m.GoName)
+	svcMethod.NameLowerCase = firstLetterToLowerCase(svcMethod.Name)
+	svcMethod.Request = m.Input.GoIdent.GoName
+	svcMethod.Response = m.Output.GoIdent.GoName
+
+	options, ok := m.Desc.Options().(*descriptorpb.MethodOptions)
+	if !ok {
+		return svcMethod, fmt.Errorf("method %v: options are not of type google.protobuf.MethodOptions", m.GoName)
 	}
+
+	if options != (*descriptorpb.MethodOptions)(nil) {
+		if !proto.HasExtension(options, annotations.E_Http) {
+			return svcMethod, fmt.Errorf("method %v: options are not of type google.api.httpRule", m.GoName)
+		}
+
+		httpRule := proto.GetExtension(options, annotations.E_Http).(*annotations.HttpRule)
+
+		ht := &http{}
+
+		switch httpRule.Pattern.(type) {
+		case *annotations.HttpRule_Get:
+			ht.Method = "GET"
+			ht.URI = httpRule.GetGet()
+		case *annotations.HttpRule_Post:
+			ht.Method = "POST"
+			ht.URI = httpRule.GetPost()
+		case *annotations.HttpRule_Put:
+			ht.Method = "PUT"
+			ht.URI = httpRule.GetPut()
+		case *annotations.HttpRule_Patch:
+			ht.Method = "PATCH"
+			ht.URI = httpRule.GetPatch()
+		default:
+			return svcMethod, errors.New("HTTP method must be of type GET | POST | PUT | PATCH")
+		}
+
+		ht.VarsLowerCase = parseHTTPVariables(ht.URI)
+		for _, s := range ht.VarsLowerCase {
+			ht.Vars = append(ht.Vars, strings.Title(s))
+		}
+
+		svcMethod.HTTP = ht
+	}
+
+	return
+}
+
+func parseHTTPVariables(uri string) []string {
+	f := func(c rune) bool {
+		return c == '/'
+	}
+	fields := strings.FieldsFunc(uri, f)
+
+	var vars []string
+	for _, s := range fields {
+		if s[0] == '{' {
+			if i := strings.Index(s, ":"); i != -1 {
+				vars = append(vars, s[1:i])
+				continue
+			}
+
+			i := strings.Index(s, "}")
+			vars = append(vars, s[1:i])
+		}
+	}
+
+	return vars
+}
+
+func createFileFromTemplate(svc serivce, filePath, templatePath string) (err error) {
+	filePath = strings.Replace(filePath, "{svc}", svc.ServiceNameLowerCase, -1)
+
+	// TODO promt user that file already exist and it will be truncated
+	// if _, err = os.Stat(filePath); os.IsExist(err) {
+	// }
 
 	if err = os.MkdirAll(filepath.Dir(filePath), 0775); err != nil {
 		return fmt.Errorf("os.MkdirAll() %w", err)
@@ -161,17 +213,17 @@ func createFileFromTemplate(svc serivce, filePath, templatePath string) (err err
 
 	b, err := templateDir.ReadFile(templatePath)
 	if err != nil {
-		return fmt.Errorf("Unable to read template file: %w", err)
+		return fmt.Errorf("unable to read template file: %w", err)
 	}
 
 	t := template.New(templatePath)
 	t, err = t.Parse(string(b))
 	if err != nil {
-		return fmt.Errorf("Unable to parse template file: %w", err)
+		return fmt.Errorf("unable to parse template file: %w", err)
 	}
 
 	if err = t.Execute(f, svc); err != nil {
-		return fmt.Errorf("Error executing template %v:%w", t.Name(), err)
+		return fmt.Errorf("error executing template %v:%w", t.Name(), err)
 	}
 
 	return

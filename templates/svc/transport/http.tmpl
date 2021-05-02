@@ -5,6 +5,7 @@ package transport
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -34,9 +35,9 @@ func MakeHTTPHandler(endpoints svc.Endpoints, options ...httptransport.ServerOpt
 
 	m := mux.NewRouter()
 	
-	{{- range .Methods}}{{if .HTTPMethod}}
+	{{- range .Methods}}{{if .HTTP}}
 	
-	m.Methods("{{.HTTPMethod}}").Path("{{.HTTPurl}}").Handler(httptransport.NewServer(
+	m.Methods("{{.HTTP.Method}}").Path("{{.HTTP.URI}}").Handler(httptransport.NewServer(
 		endpoints.{{.Name}}Endpoint,
 		DecodeHTTP{{.Name}}Request,
 		EncodeHTTPGenericResponse,
@@ -101,19 +102,27 @@ func errorEncoder(_ context.Context, err error, w http.ResponseWriter) {
 
 // Server Decode
 
-{{- range .Methods}}
+{{- range .Methods}}{{if .HTTP}}
 
 // DecodeHTTP{{.Name}}Request is a transport/http/DecodeRequestFunc that
 // decodes a JSON-encoded {{.NameLowerCase}} request from the HTTP request body.
 func DecodeHTTP{{.Name}}Request(_ context.Context, r *http.Request) (interface{}, error) {
-	var req pb.{{.Name}}Request
+	var req pb.{{.Request}}
 
-	// if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-	// 	return nil, fmt.Errorf("Failed to decode json request: %w", err)
-	// }
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return nil, fmt.Errorf("Failed to decode json request: %w", err)
+	}
+
+	{{- if .HTTP.VarsLowerCase}}
+	
+	vars := mux.Vars(r){{end}}
+	{{- $v := .HTTP.Vars}}
+	{{- range $i, $el := .HTTP.VarsLowerCase}}
+	req.{{index $v $i}} = vars["{{$el}}"]
+	{{- end}}
 
 	return &req, nil
-}{{end}}
+}{{end}}{{end}}
 
 // EncodeHTTPGenericResponse is a transport/http.EncodeResponseFunc that encodes
 // the response as JSON to the response writer. Primarily useful in a server.

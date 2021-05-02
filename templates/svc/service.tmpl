@@ -6,16 +6,16 @@ import (
 	pb "{{.ImportPath}}/pkg/pb"
 )
 
-{{- $sname := .ServiceNameLoweCase}}
+{{- $sname := .ServiceNameLowerCase}}
 
-// {{.ServiceNameLoweCase}}Service contains the business logic
-type {{.ServiceNameLoweCase}}Service struct {
+// {{.ServiceNameLowerCase}}Service contains the business logic
+type {{.ServiceNameLowerCase}}Service struct {
 	pb.Unimplemented{{.ServiceName}}Server
 }
 
 // NewService returns an implementation of {.ServiceName}Server.
 func NewService() pb.{{.ServiceName}}Server {
-	return &{{.ServiceNameLoweCase}}Service{}
+	return &{{.ServiceNameLowerCase}}Service{}
 }
 
 {{- range .Methods}}

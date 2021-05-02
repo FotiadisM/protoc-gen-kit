@@ -19,7 +19,7 @@ import (
 // CtxKey type definision for passing context values
 type CtxKey string
 
-// grpcServer implements the {{.ServiceNameLoweCase}}.{{.ServiceName}}Server interface
+// grpcServer implements the {{.ServiceNameLowerCase}}.{{.ServiceName}}Server interface
 type grpcServer struct { {{- range .Methods}}
 	{{.NameLowerCase}}     grpctransport.Handler{{end}}
 	pb.Unimplemented{{.ServiceName}}Server

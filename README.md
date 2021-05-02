@@ -63,7 +63,7 @@ message HelloResponse {
 
 ```
 
-It's important that the option `go_package` is in the form of `<module path>/<service package>`.<br>
+It's important that the option `go_package` is in the form of `<module path>/<service package>`.  
 In the given example is the module path is `github.com/FotiadisM/protoc-gen-kit/example` and the serivce package is `hello`.
 
 Then you generate the service by running:
