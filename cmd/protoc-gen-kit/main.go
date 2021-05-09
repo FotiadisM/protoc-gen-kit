@@ -13,8 +13,9 @@ func main() {
 		panic(err)
 	}
 
+	appName := p.Parameters["appName"]
 	c := generator.Config{
-		AppName:  "hello",
+		AppName:  appName,
 		TemplDir: "./templates",
 		Proto:    p,
 	}

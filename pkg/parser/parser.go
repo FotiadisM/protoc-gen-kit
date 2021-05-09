@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"unicode"
@@ -21,6 +20,7 @@ type Proto struct {
 	Package      string
 	GoImportPath string
 	Services     []Service
+	Parameters   map[string]string
 }
 
 type Service struct {
@@ -59,6 +59,10 @@ func Parse(r io.Reader) (p Proto, err error) {
 	var req pluginpb.CodeGeneratorRequest
 	if err = proto.Unmarshal(input, &req); err != nil {
 		return p, fmt.Errorf("failed to unmarshal input: %w", err)
+	}
+
+	if req.Parameter != nil {
+		p.Parameters = parseParameters(*req.Parameter)
 	}
 
 	opts := protogen.Options{}
@@ -114,12 +118,10 @@ func parseMethod(protoMethod *protogen.Method) (m Method, err error) {
 }
 
 func parseHTTP(protoMethod *protogen.Method) (h *Http, err error) {
-	fmt.Fprintf(os.Stderr, "|%v| %T\n", protoMethod.Desc.Options(), protoMethod.Desc.Options())
 	options, ok := protoMethod.Desc.Options().(*descriptorpb.MethodOptions)
 	if !ok {
 		return nil, fmt.Errorf("options are not of type google.protobuf.MethodOptions")
 	}
-	fmt.Fprintf(os.Stderr, "|%v| %T\n", options, options)
 
 	if options != (*descriptorpb.MethodOptions)(nil) {
 		if !proto.HasExtension(options, annotations.E_Http) {
@@ -184,6 +186,18 @@ func parseHTTPVariables(url string) []string {
 	}
 
 	return vars
+}
+
+func parseParameters(s string) map[string]string {
+	paramsArray := strings.Split(s, ",")
+
+	params := make(map[string]string)
+	for _, p := range paramsArray {
+		kv := strings.Split(p, "=")
+		params[kv[0]] = kv[1]
+	}
+
+	return params
 }
 
 func firstLetterToLowerCase(s string) string {

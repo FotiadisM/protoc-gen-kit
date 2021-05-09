@@ -35,8 +35,13 @@ func Generate(c Config) (err error) {
 	}
 
 	for _, gFile := range g.Files {
-		genPath := strings.ReplaceAll(gFile.GenPath, "{AppName}", c.AppName)
-		f, err := createFile(genPath)
+		if strings.Contains(gFile.GenPath, "{AppName}") {
+			if c.AppName == "" {
+				return fmt.Errorf("generator path contains '{AppName}' but no app name was specified, use the flag -app string")
+			}
+			gFile.GenPath = strings.ReplaceAll(gFile.GenPath, "{AppName}", c.AppName)
+		}
+		f, err := createFile(gFile.GenPath)
 		if err != nil {
 			return err
 		}
