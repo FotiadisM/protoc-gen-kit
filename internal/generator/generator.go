@@ -1,7 +1,10 @@
 package generator
 
 import (
+	"embed"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,8 +15,12 @@ import (
 )
 
 const (
-	generatorFileNane string = "generator.yaml"
+	generatorFileNane       string = "generator.yaml"
+	defaultTemplatesDirName string = "templates"
 )
+
+//go:embed templates
+var defaultTemplates embed.FS
 
 type Config struct {
 	TemplDir string
@@ -29,11 +36,28 @@ type generatorFile struct {
 }
 
 func Generate(c Config) (err error) {
-	g, err := parseGeneratorFile(filepath.Join(c.TemplDir, generatorFileNane))
-	if err != nil {
-		return
-	}
+	var g generatorFile
 
+	// opening and parsing generator file
+	var f fs.File
+	if c.TemplDir == "" { // use default template
+		f, err = defaultTemplates.Open(filepath.Join(defaultTemplatesDirName, generatorFileNane))
+		if err != nil {
+			return fmt.Errorf("failed to open %v of the default template: %w", generatorFileNane, err)
+		}
+	} else {
+		f, err = os.Open(filepath.Join(c.TemplDir, generatorFileNane))
+		if err != nil {
+			return fmt.Errorf("failed to open %v: %w", filepath.Join(c.TemplDir, generatorFileNane), err)
+		}
+	}
+	g, err = parseGeneratorFile(f)
+	if err != nil {
+		return err
+	}
+	f.Close()
+
+	// creating files and executing templates
 	for _, gFile := range g.Files {
 		if strings.Contains(gFile.GenPath, "{AppName}") {
 			if c.AppName == "" {
@@ -46,10 +70,21 @@ func Generate(c Config) (err error) {
 			return err
 		}
 
-		tmplPath := filepath.Join(c.TemplDir, gFile.TmplPath)
-		err = parseTemplate(f, tmplPath, c.Proto)
+		var templateString []byte
+		if c.TemplDir == "" { //use default template
+			templateString, err = defaultTemplates.ReadFile(filepath.Join(defaultTemplatesDirName, gFile.TmplPath))
+			if err != nil {
+				return fmt.Errorf("failed to read file %v of the defualt template: %w", gFile.TmplPath, err)
+			}
+		} else {
+			templateString, err = os.ReadFile(filepath.Join(c.TemplDir, gFile.TmplPath))
+			if err != nil {
+				return fmt.Errorf("failed to read file %v: %w", gFile.TmplPath, err)
+			}
+		}
+		err = parseTemplate(f, string(templateString), c.Proto)
 		if err != nil {
-			return err
+			return fmt.Errorf("template: %v: %w", gFile.TmplPath, err)
 		}
 
 		f.Close()
@@ -58,16 +93,10 @@ func Generate(c Config) (err error) {
 	return
 }
 
-func parseGeneratorFile(genFilePath string) (g generatorFile, err error) {
-	f, err := os.Open(genFilePath)
-	if err != nil {
-		return g, fmt.Errorf("failed to open %v: %w", genFilePath, err)
-	}
-	defer f.Close()
-
+func parseGeneratorFile(f io.Reader) (g generatorFile, err error) {
 	err = yaml.NewDecoder(f).Decode(&g)
 	if err != nil {
-		return g, fmt.Errorf("failed to decode %v: %w", genFilePath, err)
+		return g, fmt.Errorf("failed to decode %v: %w", generatorFileNane, err)
 	}
 
 	return
@@ -86,15 +115,15 @@ func createFile(path string) (f *os.File, err error) {
 	return
 }
 
-func parseTemplate(f *os.File, tmplPath string, proto parser.Proto) error {
-	t, err := template.ParseFiles(tmplPath)
+func parseTemplate(f *os.File, templateString string, proto parser.Proto) error {
+	t, err := template.New("genericName").Parse(templateString)
 	if err != nil {
-		return fmt.Errorf("failed to parse template %v: %w", tmplPath, err)
+		return fmt.Errorf("failed to parse: %w", err)
 	}
 
 	err = t.Execute(f, proto)
 	if err != nil {
-		return fmt.Errorf("failed to execute template %v: %w", tmplPath, err)
+		return fmt.Errorf("failed to execute: %w", err)
 	}
 
 	return nil

@@ -14,11 +14,13 @@ func main() {
 	}
 
 	appName := p.Parameters["appName"]
+	tmplPath := p.Parameters["templPath"]
 	c := generator.Config{
 		AppName:  appName,
-		TemplDir: "./templates",
+		TemplDir: tmplPath,
 		Proto:    p,
 	}
+
 	err = generator.Generate(c)
 	if err != nil {
 		panic(err)

@@ -1,0 +1,3 @@
+files:
+  - templatePath: "cmd/main.tmpl"
+    generatorPath: "./cmd/{AppName}/main.go"

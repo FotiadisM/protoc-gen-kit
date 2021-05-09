@@ -1,0 +1,120 @@
+package server
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"net"
+	"net/http"
+	"net/http/pprof"
+	"os"
+	"os/signal"
+	"syscall"
+
+	"google.golang.org/grpc"
+
+	pb "{{.ImportPath}}/pkg/pb"
+	"{{.ImportPath}}/pkg/middleware"
+	"{{.ImportPath}}/pkg/svc"
+	"{{.ImportPath}}/pkg/svc/transport"
+)
+
+// Config contains the required fields for running a server
+type Config struct {
+	HTTPAddr  string
+	DebugAddr string
+	GRPCAddr  string
+}
+
+// wrapEndpoints takes a service containing the buisness logic,
+// creates all the endpoints, and wraps them with middleware
+// using the middleware.WrapService() and middleware.WrapEndpoints()
+func wrapEndpoints(service pb.{{.ServiceName}}Server) svc.Endpoints {
+	// Business domain.
+
+	// Wrap Service with middlewares. See handlers/middlewares.go
+	// service = middleware.WrapService(service)
+
+	endpoints := svc.Endpoints{ {{- range .Methods}}
+		{{.Name}}Endpoint:     svc.Make{{.Name}}Endpoint(service),{{end}}
+	}
+
+	// Wrap selected Endpoints with middlewares. See handlers/middlewares.go
+	endpoints = middleware.WrapEndpoints(endpoints)
+
+	return endpoints
+}
+
+// Run starts a new http server, gRPC server, and a debug server with the
+// passed config and logger
+func Run(cfg Config) {
+	service := svc.NewService()
+	endpoints := wrapEndpoints(service)
+
+	errc := make(chan error)
+
+	// Debug listener.
+	go func() {
+		log.Println("transport", "debug", "addr", cfg.DebugAddr)
+
+		m := http.NewServeMux()
+		m.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))
+		m.Handle("/debug/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
+		m.Handle("/debug/pprof/profile", http.HandlerFunc(pprof.Profile))
+		m.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
+		m.Handle("/debug/pprof/trace", http.HandlerFunc(pprof.Trace))
+
+		errc <- http.ListenAndServe(cfg.DebugAddr, m)
+	}()
+
+	// HTTP transport.
+	var httpServer *http.Server
+	go func() {
+		h := transport.MakeHTTPHandler(endpoints)
+
+		httpServer = &http.Server{
+			Addr:    cfg.HTTPAddr,
+			Handler: h,
+		}
+
+		log.Println("transport", "HTTP", "addr", cfg.HTTPAddr)
+		errc <- httpServer.ListenAndServe()
+	}()
+
+	// gRPC transport.
+	var grpcServer *grpc.Server
+	go func() {
+		grpcServer = grpc.NewServer()
+
+		log.Println("transport", "gRPC", "addr", cfg.GRPCAddr)
+		ln, err := net.Listen("tcp", cfg.GRPCAddr)
+		if err != nil {
+			errc <- err
+			return
+		}
+
+		srv := transport.MakeGRPCServer(endpoints)
+		pb.Register{{.ServiceName}}Server(grpcServer, srv)
+
+		errc <- grpcServer.Serve(ln)
+	}()
+
+	// interrupt handler.
+	go interruptHandler(errc, grpcServer, httpServer)
+
+	// Run!
+	log.Println("exit", <-errc)
+}
+
+// interruptHandler handles graceful shutdown
+func interruptHandler(errc chan<- error, grpcServer *grpc.Server, httpServer *http.Server) {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
+	terminateError := fmt.Errorf("%s", <-c)
+
+	grpcServer.GracefulStop()
+	ctx := context.Background()
+	httpServer.Shutdown(ctx)
+
+	errc <- terminateError
+}
