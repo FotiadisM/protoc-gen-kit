@@ -1,7 +1,5 @@
 # protoc-gen-kit
 
-wow such plugin o.O
-
 1. [About](#about)
 2. [Installation](#installation)
 3. [Usage](#usage)
